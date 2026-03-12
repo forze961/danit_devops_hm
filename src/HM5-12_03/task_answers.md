@@ -14,6 +14,6 @@
 
 ## Systemd service for monitor files
 
-| Task | Description | Files | Execution Result                                |
-| :--- | :--- | :--- |:------------------------------------------------|
-| **Directory Watcher** | Background service that monitors a folder for new files and automatically renames them. | [watch.sh](scripts/watch.sh) <br> [watch.service](service/watch.service) | ![Service Status](assets/res_service_watch.png) |
+| Task | Description | Files                                                                     | Execution Result                                |
+| :--- | :--- |:--------------------------------------------------------------------------|:------------------------------------------------|
+| **Directory Watcher** | Background service that monitors a folder for new files and automatically renames them. | [watch.sh](scripts/watch.sh) <br> [watch.service](services/watch.service) | ![Service Status](assets/res_service_watch.png) |
