@@ -1,0 +1,11 @@
+[Unit]
+Description=Monitor ~/watch directory for new files
+After=network.target
+
+[Service]
+ExecStart=/bin/bash /home/dl/watch.sh
+Restart=always
+User=dl
+
+[Install]
+WantedBy=multi-user.target
