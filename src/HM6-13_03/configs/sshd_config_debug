@@ -1,0 +1,11 @@
+Port 3333
+
+PidFile /run/sshd-debug.pid
+
+PermitRootLogin yes
+
+PasswordAuthentication no
+PubkeyAuthentication yes
+
+AllowUsers john
+LogLevel DEBUG3

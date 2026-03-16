@@ -1,0 +1,13 @@
+[Unit]
+Description=Dedicated SSH Server for John
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/sshd -D -f /etc/ssh/sshd_config_debug
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
