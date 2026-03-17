@@ -5,3 +5,6 @@
 # IDEs and editors
 .idea/*
 .vscode/*
+
+# Vagrant ENV
+.vagrant
