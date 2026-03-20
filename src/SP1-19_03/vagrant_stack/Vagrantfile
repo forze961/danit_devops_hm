@@ -1,0 +1,59 @@
+if File.exist?(".env")
+  File.readlines(".env").each do |line|
+    line.strip!
+    next if line.empty? || line.start_with?("#")
+    key, value = line.split("=", 2)
+    ENV[key] = value
+  end
+end
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "utm/ubuntu-24.04"
+
+  config.vm.provider "utm" do |u|
+    u.cpus = 2
+    u.memory = 1512
+  end
+
+  # DB
+  config.vm.define "DB" do |db|
+    db.vm.hostname = "db-vm"
+    db.vm.network "forwarded_port", guest: (ENV["DB_PORT"] || 3306).to_i, host: (ENV["DB_HOST_PROXY_PORT"] || 3306).to_i
+
+    db.vm.provision "shell" do |s|
+        s.path = "entrypoint/db.sh"
+        s.env = {
+                "DB_USER" => ENV["DB_USER"],
+                "DB_PASS" => ENV["DB_PASS"],
+                "DB_NAME" => ENV["DB_NAME"],
+                "SUBNET"  => ENV["SUBNET"],
+        }
+    end
+  end
+
+  # APP
+  config.vm.define "APP_VM" do |app|
+    app.vm.hostname = "app-vm"
+    app.vm.network "forwarded_port", guest: 8080, host: (ENV["APP_HOST_PROXY_PORT"] || 8088).to_i
+
+    app.vm.provision "shell" do |s|
+      s.path = "entrypoint/app.sh"
+      # Environment variables for APP_VM
+      s.env = {
+        "DB_HOST" => ENV["DB_HOST"],
+        "DB_PORT" => ENV["DB_HOST_PROXY_PORT"],
+        "DB_NAME" => ENV["DB_NAME"],
+        "DB_USER" => ENV["DB_USER"],
+        "DB_PASS" => ENV["DB_PASS"],
+        "APP_USER" => ENV["APP_USER"],
+        "APP_DIR"  => ENV["APP_DIR"],
+        "PROJECT_DIR" => "/opt/petclinic"
+      }
+    end
+  end
+
+  config.trigger.after :up do |trigger|
+    trigger.info = "Access it from your host machine at: http://localhost:#{ENV['APP_HOST_PROXY_PORT']}"
+  end
+end
+.
