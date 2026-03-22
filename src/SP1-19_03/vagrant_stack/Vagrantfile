@@ -56,4 +56,3 @@ Vagrant.configure("2") do |config|
     trigger.info = "Access it from your host machine at: http://localhost:#{ENV['APP_HOST_PROXY_PORT']}"
   end
 end
-.
