@@ -1,0 +1,197 @@
+
+--- 1. Retrieve all existing students (GET) ---
+Status Code: 200
+Response: [
+  {
+    "age": "25",
+    "first_name": "Bob",
+    "id": "2",
+    "last_name": "Jones"
+  },
+  {
+    "age": "30",
+    "first_name": "Charles",
+    "id": "3",
+    "last_name": "Darwin"
+  }
+]
+
+
+--- 2.1. Create student 1 (POST) ---
+Status Code: 201
+Response: {
+  "age": "20",
+  "first_name": "Alice",
+  "id": "4",
+  "last_name": "Smith"
+}
+
+
+--- 2.2. Create student 2 (POST) ---
+Status Code: 201
+Response: {
+  "age": "22",
+  "first_name": "Bob",
+  "id": "5",
+  "last_name": "Jones"
+}
+
+
+--- 2.3. Create student 3 (POST) ---
+Status Code: 201
+Response: {
+  "age": "21",
+  "first_name": "Charlie",
+  "id": "6",
+  "last_name": "Brown"
+}
+
+
+--- 3. Retrieve information about all existing students (GET) ---
+Status Code: 200
+Response: [
+  {
+    "age": "25",
+    "first_name": "Bob",
+    "id": "2",
+    "last_name": "Jones"
+  },
+  {
+    "age": "30",
+    "first_name": "Charles",
+    "id": "3",
+    "last_name": "Darwin"
+  },
+  {
+    "age": "20",
+    "first_name": "Alice",
+    "id": "4",
+    "last_name": "Smith"
+  },
+  {
+    "age": "22",
+    "first_name": "Bob",
+    "id": "5",
+    "last_name": "Jones"
+  },
+  {
+    "age": "21",
+    "first_name": "Charlie",
+    "id": "6",
+    "last_name": "Brown"
+  }
+]
+
+
+--- 4. Update the age of the second student (PATCH) ---
+Status Code: 200
+Response: {
+  "age": "25",
+  "first_name": "Bob",
+  "id": "5",
+  "last_name": "Jones"
+}
+
+
+--- 5. Retrieve information about the second student (GET) ---
+Status Code: 200
+Response: {
+  "age": "25",
+  "first_name": "Bob",
+  "id": "5",
+  "last_name": "Jones"
+}
+
+
+--- 6. Update the first name, last name and the age of the third student (PUT) ---
+Status Code: 200
+Response: {
+  "age": "30",
+  "first_name": "Charles",
+  "id": "6",
+  "last_name": "Darwin"
+}
+
+
+--- 7. Retrieve information about the third student (GET) ---
+Status Code: 200
+Response: {
+  "age": "30",
+  "first_name": "Charles",
+  "id": "6",
+  "last_name": "Darwin"
+}
+
+
+--- 8. Retrieve all existing students (GET) ---
+Status Code: 200
+Response: [
+  {
+    "age": "25",
+    "first_name": "Bob",
+    "id": "2",
+    "last_name": "Jones"
+  },
+  {
+    "age": "30",
+    "first_name": "Charles",
+    "id": "3",
+    "last_name": "Darwin"
+  },
+  {
+    "age": "20",
+    "first_name": "Alice",
+    "id": "4",
+    "last_name": "Smith"
+  },
+  {
+    "age": "25",
+    "first_name": "Bob",
+    "id": "5",
+    "last_name": "Jones"
+  },
+  {
+    "age": "30",
+    "first_name": "Charles",
+    "id": "6",
+    "last_name": "Darwin"
+  }
+]
+
+
+--- 9. Delete the first user (DELETE) ---
+Status Code: 200
+Response: {
+  "message": "Student deleted successfully"
+}
+
+
+--- 10. Retrieve all existing students (GET) ---
+Status Code: 200
+Response: [
+  {
+    "age": "25",
+    "first_name": "Bob",
+    "id": "2",
+    "last_name": "Jones"
+  },
+  {
+    "age": "30",
+    "first_name": "Charles",
+    "id": "3",
+    "last_name": "Darwin"
+  },
+  {
+    "age": "25",
+    "first_name": "Bob",
+    "id": "5",
+    "last_name": "Jones"
+  },
+  {
+    "age": "30",
+    "first_name": "Charles",
+    "id": "6",
+    "last_name": "Darwin"
+  }
+]
+
