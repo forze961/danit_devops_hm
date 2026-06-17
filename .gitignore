@@ -8,3 +8,8 @@
 
 # Vagrant ENV
 .vagrant
+
+#Python
+*/.venv
+
+.env
