@@ -1,0 +1,13 @@
+{
+  "name": "nodejs-test-app",
+  "version": "1.0.0",
+  "description": "A simple Node.js app for Jenkins pipeline test",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

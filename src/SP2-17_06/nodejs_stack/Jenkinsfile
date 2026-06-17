@@ -1,0 +1,53 @@
+pipeline {
+    agent { label 'worker' } // Runs on the worker node
+
+    environment {
+        // ID of Jenkins credentials containing Docker Hub username and password
+        // Use 'dockerhub' as the default credentials ID. The user can create this ID in the Jenkins UI.
+        DOCKER_CREDS = credentials('dockerhub')
+        
+        // Define the image name (the user should customize this to their Docker Hub username)
+        IMAGE_NAME = 'your-dockerhub-username/nodejs-test-app'
+    }
+
+    stages {
+        stage('Pull Code') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest ."
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    try {
+                        // Run the built image and execute 'npm test'
+                        sh "docker run --rm ${IMAGE_NAME}:${BUILD_NUMBER} npm test"
+                    } catch (err) {
+                        echo "Tests failed"
+                        // Propagate the failure to mark the build as failed
+                        error "Pipeline failed due to test failures"
+                    }
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    // Login to Docker Hub
+                    sh "echo \$DOCKER_CREDS_PSW | docker login -u \$DOCKER_CREDS_USR --password-stdin"
+                    // Push the built image tags
+                    sh "docker push ${IMAGE_NAME}:${BUILD_NUMBER}"
+                    sh "docker push ${IMAGE_NAME}:latest"
+                }
+            }
+        }
+    }
+}
