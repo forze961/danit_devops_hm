@@ -15,44 +15,41 @@ Vagrant.configure("2") do |config|
     u.memory = 1512
   end
 
-  # DB
-  config.vm.define "DB" do |db|
-    db.vm.hostname = "db-vm"
-    db.vm.network "forwarded_port", guest: (ENV["DB_PORT"] || 3306).to_i, host: (ENV["DB_HOST_PROXY_PORT"] || 3306).to_i
+  # Jenkins server
+  config.vm.define "J_SERVER" do |db|
+    db.vm.hostname = "j-server-vm"
+    db.vm.network "forwarded_port", guest: 4000, host: (ENV["J_SERVER_PROXY_PORT"] || 4000).to_i
+    db.vm.network "forwarded_port", guest: 50000, host: 50000
+    db.vm.synced_folder "../nodejs_stack", "/opt/nodejs_stack"
 
     db.vm.provision "shell" do |s|
-        s.path = "entrypoint/db.sh"
+        s.path = "entrypoint/j-server.sh"
         s.env = {
-                "DB_USER" => ENV["DB_USER"],
-                "DB_PASS" => ENV["DB_PASS"],
-                "DB_NAME" => ENV["DB_NAME"],
-                "SUBNET"  => ENV["SUBNET"],
+          "GITHUB_USER" => ENV["GITHUB_USER"],
+          "GITHUB_TOKEN" => ENV["GITHUB_TOKEN"],
+          "GITHUB_REPO_URL" => ENV["GITHUB_REPO_URL"],
+          "DOCKERHUB_USER" => ENV["DOCKERHUB_USER"],
+          "DOCKERHUB_PASSWORD" => ENV["DOCKERHUB_PASSWORD"],
+          "J_SERVER_PORT" => ENV["J_SERVER_PORT"] || "4000"
         }
     end
   end
 
-  # APP
-  config.vm.define "APP_VM" do |app|
-    app.vm.hostname = "app-vm"
-    app.vm.network "forwarded_port", guest: 8080, host: (ENV["APP_HOST_PROXY_PORT"] || 8088).to_i
+  # Jenkins worker
+  config.vm.define "J_WORKER" do |app|
+    app.vm.hostname = "j-worker-vm"
+    app.vm.network "forwarded_port", guest: 4001, host: (ENV["J_WORKER_PROXY_PORT"] || 4001).to_i
+    app.vm.synced_folder "../nodejs_stack", "/opt/nodejs_stack"
 
     app.vm.provision "shell" do |s|
-      s.path = "entrypoint/app.sh"
-      # Environment variables for APP_VM
+      s.path = "entrypoint/j-worker.sh"
       s.env = {
-        "DB_HOST" => ENV["DB_HOST"],
-        "DB_PORT" => ENV["DB_HOST_PROXY_PORT"],
-        "DB_NAME" => ENV["DB_NAME"],
-        "DB_USER" => ENV["DB_USER"],
-        "DB_PASS" => ENV["DB_PASS"],
-        "APP_USER" => ENV["APP_USER"],
-        "APP_DIR"  => ENV["APP_DIR"],
-        "PROJECT_DIR" => "/opt/petclinic"
+        "GIT_REPO_URL" => ENV["GIT_REPO_URL"]
       }
     end
   end
 
   config.trigger.after :up do |trigger|
-    trigger.info = "Access it from your host machine at: http://localhost:#{ENV['APP_HOST_PROXY_PORT']}"
+    trigger.info = "Access Jenkins from your host machine at: http://localhost:#{ENV['J_SERVER_PROXY_PORT'] || 4000}"
   end
 end

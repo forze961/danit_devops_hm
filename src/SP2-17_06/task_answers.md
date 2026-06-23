@@ -1,62 +1,94 @@
-## Step project 1
+## Step Project 2 — Jenkins Master-Worker Pipeline Stack
 
-Deploying Spring PetClinic Sample Application localy using Vagrant
-Use source code from re﻿po
-Create repository on Gitlab and commit all changes to your gitlab repository
+### Task Description
 
-Create a deployment script for the PetClinic application. Use Vagrant to automate the process of creating the infrastructure for the deployment with Virtualbox (preferably). As for provisioning you can choose to use bash, python or ansbile in any combination.
+1. Create two virtual machines using Vagrant (Jenkins Master and Jenkins Worker).
+2. Install Docker on both and run Jenkins Master inside a Docker container.
+3. Securely auto-provision Docker Hub and GitHub credentials using an initialization Groovy script on startup.
+4. Connect the Jenkins Worker VM directly to the Jenkins Master.
+5. Create a pipeline to pull code from SCM, compile the Docker image, run tests, login using credentials, and push it to Docker Hub if tests pass.
 
+---
 
-Subtask I - Infrastructure
+### Solution Files
 
+| File | Purpose | Source Code |
+| :--- | :--- | :--- |
+| **Vagrantfile** | Configuration file to boot and configure both J_SERVER and J_WORKER VMs | [Vagrantfile](vagrant_stack/Vagrantfile) |
+| **j-server.sh** | Provisioner script for Jenkins Master (installs Docker and pre-installs plugins) | [j-server.sh](vagrant_stack/entrypoint/j-server.sh) |
+| **j-worker.sh** | Provisioner script for Jenkins Worker (sets up Java, Docker, and agent service) | [j-worker.sh](vagrant_stack/entrypoint/j-worker.sh) |
+| **Jenkinsfile** | Pipeline configuration outlining build, test, and push steps | [Jenkinsfile](nodejs_stack/Jenkinsfile) |
 
-    Describe two virtual machines using Vagrantfile for deployment of the application (codename APP_VM) and the database (codename DB_VM)
-    VMs should be either Centos or Ubuntu
-    If not using private networking then APP_VM should have port 8080 forwarded to host
+---
 
+### Execution Results (Screenshots)
 
-Subtask II - Database
+| Step | Action / Verification | Screenshot                             |
+| :--- | :--- |:---------------------------------------|
+| **1. VM Status** | Running `vagrant status` on host to show both `J_SERVER` and `J_WORKER` VMs are active and running. | ![VM Status](assets/img.png)           |
+| **2. Auto-Provisioned Credentials** | Inside Jenkins Credentials page, showing both `github-credentials` and `dockerhub` auto-provisioned correctly from the `.env` variables at boot. | ![Credentials](assets/img_1.png)       |
+| **3. Connected Worker Agent** | Under Nodes list, showing the `worker` node is online and connected successfully. | ![Connected Worker](assets/img_2.png)  |
+| **4. Pipeline Execution History** | The pipeline execution history showing builds #2 and #3 completed successfully. | ![Pipeline Success](assets/img_3.png)  |
+| **5. Disable Worker Node** | Making the `worker` node offline in the Jenkins UI to test execution control. | ![Disable Worker](assets/img_5.png)    |
+| **6. Blocked Build (Offline Worker)** | Running the pipeline while the worker is offline shows the build hanging, waiting for the worker to come back online. | ![Blocked Build](assets/img_4.png)     |
+| **7. Docker Hub Verification** | Docker Hub repositories list showing the image pushed successfully with the correct build version tag. | ![Docker Hub Pushed](assets/img_6.png) |
 
+---
 
-    Use any provisioning script that you created to install MySQL and any dependency on DB_VM
-    Customize the mysql database to accept connections only from your vagrant private network subnet
-    Create a non root user and password (codename DB_USER and DB_PASS) in mysql. Use host environment variable to set these values and pass them to the Vagrantfile using ENV
-    Create a database in mysql (codename DB_NAME) and grant all privileges for the DB_USER to access the database
+## Detailed Setup Instructions (Getting Started)
 
+### 1. Environment Setup
+1. Navigate to the `vagrant_stack` folder:
+   ```bash
+   cd src/SP2-17_06/vagrant_stack
+   ```
+2. Copy the template to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+3. Edit `.env` with your GitHub and Docker Hub credentials.
 
-Subtask III - Application
+### 2. Booting the Stack
+Run:
+```bash
+vagrant up
+```
+This boots both machines and automatically mounts directories, configures Docker, pre-installs plugins, and creates the Groovy credential files.
 
+### 3. Accessing Jenkins
+1. Open `http://localhost:4000` in your browser.
+2. Retrieve the **Initial Admin Password** from the console output (or using `vagrant ssh J_SERVER -c "sudo cat /var/jenkins_home/secrets/initialAdminPassword"`).
+3. Unlock Jenkins and choose **Install suggested plugins**.
+4. Create your admin user profile.
 
-    Create a non root user (codename APP_USER) that will be used to run the application on APP_VM
-    Use any provisioner to install Java JDK, git and any dependency on APP_VM
-    Clone this repository to the working folder (codename PROJECT_DIR)
-    Use the Maven tool to run tests and package the application. For more info you can use this 5 minutes maven documentation. For convenience the project folder has Maven wrapper script (mvnw) that downloads and executes the required Maven binary automaticaly.
-    If testing and packaging is successful, then get the *.jar package from $PROJECT_DIR/target folder and place it in the APP_USER home folder (codename APP_DIR).
+### 4. Setting up the Agent (Worker Node)
+1. In Jenkins, go to **Manage Jenkins** -> **Nodes** -> **New Node**.
+2. Name it `worker`, select **Permanent Agent**, and use:
+   * **Remote root directory:** `/home/appuser/jenkins`
+   * **Labels:** `worker`
+   * **Launch method:** Launch agent by connecting it to the controller
+3. Click **Save**. Copy the generated **Secret Key** from the node page.
+4. SSH into the worker VM:
+   ```bash
+   vagrant ssh J_WORKER
+   ```
+5. Save the secret key and restart the service:
+   ```bash
+   echo "YOUR_SECRET_KEY" | sudo tee /home/appuser/jenkins/secret
+   sudo systemctl restart jenkins-agent.service
+   ```
 
-Set environment variables in APP_VM (preferable use the same environment variables passed from host machine using ENV as in DB_VM):
-
-
-    DB_HOST - IP of the DB_VM
-    DB_PORT - MySql port (default 3306)
-    DB_NAME - MySql database name
-    DB_USER - MySql user
-    DB_PASS - MySql user's password
-
-Run the application with the APP_USER using the java -jar command
-
-If everything is successful - you will see the PetClinic application on $APP_VM_IP:8080
-
-## Results
-
-**_Warning_: Cause of UTM VM on ARM architecture, I had to use forwarded ports throw host instead of private networking between VMs. So APP-VM go to DB-VM via HOST gateway**
-
-## Step Project 1: Spring PetClinic Deployment
-
-| Опис завдання (Task Description)                                                     | Source Code (Лінки на файли)                                                                                                                                   | Execution Result (Скріншоти)                                                         |
-|:-------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------|
-| **1. Код змісту Vagrantfile (включаючи конфігурації та entrypoints)**                | [Vagrantfile](vagrant_stack/Vagrantfile)<br>[db.sh](vagrant_stack/entrypoint/db.sh)<br>[app.sh](vagrant_stack/entrypoint/app.sh)<br>[.env](vagrant_stack/.env) | -                                                                                    |
-| **2. Скрін вашого git репозиторія з проектом PetClinic**                             | -                                                                                                                                                              | ![Git Folder](./assets/git_folder.png)                                               |
-| **3. Скрін підключення з однієї віртуалки до бази даних, яка на іншій**              | -                                                                                                                                                              | ![DB Connection](./assets/connected_db_from_app.png)                                 |
-| **4. Кроки, що виконувались вручну** (Усі кроки автоматизовано через Vagrant)        | -                                                                                                                                                              | -                                                                                    |
-| **5. Скрін роботи аплікації на 8080 (8088) порту з прикладом додавання своїх даних** | -                                                                                                                                                              | ![Working App](./assets/working_petclinic_on_8088.png)                               |
-| **6. Скрін сайту з існуючими й своїми доданими даними**                              | -                                                                                                                                                              | ![My Data](assets/my_data_res.png)<br><br>![Other Owners](./assets/other_owners.png) |
+### 5. Create and Run the Build & Deploy Pipeline
+1. On the Jenkins home dashboard, click **New Item**.
+2. Enter the name `nodejs-pipeline`, select **Pipeline**, and click **OK**.
+3. Under the **Pipeline** configuration section:
+   * **Definition:** Select **Pipeline script from SCM**
+   * **SCM:** Select **Git**
+   * **Repository URL:** Select one of the following:
+     * **Local repository (recommended/default):** `/var/git/nodejs-app.git` (this local repo is populated automatically by the Vagrant server provisioner).
+     * **Remote GitHub repository:** Your test GitHub repository URL (e.g. `https://github.com/forze961/dl-devops-sp2-nodejs.git`).
+       * *If using a private remote repository, choose your auto-provisioned `github-credentials` in the **Credentials** dropdown menu.*
+   * **Branch Specifier:** `*/main`
+4. Click **Save**.
+5. Click **Build Now** to execute the pipeline!
+   * The pipeline will run on the `worker` agent VM. It pulls the code, builds the Docker image, runs the tests inside a temporary container, logs into Docker Hub using your credentials, and pushes the tagged image to your Docker Hub repository.

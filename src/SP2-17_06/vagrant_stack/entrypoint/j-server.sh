@@ -1,72 +1,166 @@
 #!/bin/bash
 set -e
 
-APP_OS_USER=${APP_OS_USER:-appuser}
-APP_OS_USER_HOME=${APP_OS_USER_HOME:-/home/$APP_OS_USER}
-PROJECT_DIR=${PROJECT_DIR:-/opt/petclinic}
-
-echo "=== Creating non-root user $APP_OS_USER ==="
-if ! id -u "$APP_OS_USER" >/dev/null 2>&1; then
-    useradd -m -d "$APP_OS_USER_HOME" -s /bin/bash "$APP_OS_USER"
-fi
-
-echo "=== Installing dependencies ==="
+echo "=== Installing Docker & Git ==="
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y openjdk-17-jdk git curl wget default-mysql-client net-tools
+apt-get install -y ca-certificates curl gnupg git
 
-echo "=== Setting Environment Variables System-Wide ==="
-cat <<EOF > /etc/profile.d/petclinic.sh
-export DB_HOST=${DB_HOST}
-export DB_PORT=${DB_PORT:-3306}
-export DB_NAME=${DB_NAME}
-export DB_USER=${DB_USER}
-export DB_PASS=${DB_PASS}
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+echo "=== Setting up directory for Jenkins ==="
+mkdir -p /var/jenkins_home
+
+# Create Jenkins Groovy initialization script to automatically register credentials
+mkdir -p /var/jenkins_home/init.groovy.d
+cat << 'EOF' > /var/jenkins_home/init.groovy.d/credentials.groovy
+import jenkins.model.*
+import com.cloudbees.plugins.credentials.*
+import com.cloudbees.plugins.credentials.common.*
+import com.cloudbees.plugins.credentials.domains.*
+import com.cloudbees.plugins.credentials.impl.*
+import hudson.util.Secret
+
+def domain = Domain.global()
+def store = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+
+// GitHub Credentials
+def githubUsername = System.getenv("GITHUB_USER") ?: ""
+def githubToken = System.getenv("GITHUB_TOKEN") ?: ""
+if (githubUsername && githubToken) {
+    def existing = store.getCredentials(domain).find { it.id == "github-credentials" }
+    if (existing) {
+        store.removeCredentials(domain, existing)
+    }
+    def githubCreds = new UsernamePasswordCredentialsImpl(
+        CredentialsScope.GLOBAL,
+        "github-credentials",
+        "GitHub Username and Token",
+        githubUsername,
+        githubToken
+    )
+    store.addCredentials(domain, githubCreds)
+    println "=== Jenkins Init: GitHub credentials updated successfully ==="
+}
+
+// Docker Hub Credentials
+def dockerhubUsername = System.getenv("DOCKERHUB_USER") ?: ""
+def dockerhubPassword = System.getenv("DOCKERHUB_PASSWORD") ?: ""
+if (dockerhubUsername && dockerhubPassword) {
+    def existing = store.getCredentials(domain).find { it.id == "dockerhub" }
+    if (existing) {
+        store.removeCredentials(domain, existing)
+    }
+    def dockerhubCreds = new UsernamePasswordCredentialsImpl(
+        CredentialsScope.GLOBAL,
+        "dockerhub",
+        "Docker Hub Username and Password",
+        dockerhubUsername,
+        dockerhubPassword
+    )
+    store.addCredentials(domain, dockerhubCreds)
+    println "=== Jenkins Init: Docker Hub credentials updated successfully ==="
+}
 EOF
 
-echo "=== Cloning repository ==="
-if [ ! -d "$PROJECT_DIR" ]; then
-    mkdir -p "$PROJECT_DIR"
-    chown "$APP_OS_USER:$APP_OS_USER" "$PROJECT_DIR"
-    sudo -u "$APP_OS_USER" git clone https://github.com/spring-projects/spring-petclinic.git "$PROJECT_DIR"
+# Set correct ownership (Jenkins runs as UID 1000 inside the container)
+chown -R 1000:1000 /var/jenkins_home
+
+# Allow vagrant user to run docker commands
+usermod -aG docker vagrant
+
+echo "=== Pre-installing required Jenkins plugins ==="
+docker run --rm \
+  -v /var/jenkins_home:/var/jenkins_home \
+  jenkins/jenkins:lts \
+  jenkins-plugin-cli --plugins "credentials credentials-binding git workflow-aggregator" --plugin-download-directory /var/jenkins_home/plugins
+
+echo "=== Running Jenkins in Docker ==="
+# Remove existing container if it exists to allow update of environment variables on reprovisioning
+if docker ps -a --format '{{.Names}}' | grep -q '^jenkins$'; then
+    echo "=== Recreating existing Jenkins container to apply new environment variables ==="
+    docker rm -f jenkins
 fi
 
-echo "=== Building application ==="
-cd "$PROJECT_DIR"
-sudo -u "$APP_OS_USER" ./mvnw package
+J_SERVER_PORT=${J_SERVER_PORT:-4000}
+docker run -d \
+  --name jenkins \
+  -p ${J_SERVER_PORT}:8080 \
+  -p 50000:50000 \
+  -v /var/jenkins_home:/var/jenkins_home \
+  -v /var/git:/var/git \
+  -e GITHUB_USER="${GITHUB_USER}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e DOCKERHUB_USER="${DOCKERHUB_USER}" \
+  -e DOCKERHUB_PASSWORD="${DOCKERHUB_PASSWORD}" \
+  --restart unless-stopped \
+  jenkins/jenkins:lts
 
-echo "=== Deploying application ==="
-sudo -u "$APP_OS_USER" cp target/*.jar "$APP_DIR/petclinic.jar"
+echo "=== Setting up local Git repository ==="
+mkdir -p /var/git/nodejs-app.git
+git init --bare /var/git/nodejs-app.git
+chown -R 1000:1000 /var/git/nodejs-app.git
 
-echo "=== Setting up Systemd Service ==="
-cat <<EOF > /etc/systemd/system/petclinic.service
-[Unit]
-Description=Spring PetClinic
-After=network.target
+echo "=== Preparing temporary Git repository ==="
+# Work in a temporary directory inside the VM to keep the host's synced folder clean
+rm -rf /tmp/nodejs-app
+mkdir -p /tmp/nodejs-app
+# Copy files (excluding any hidden git files if they exist)
+cp -r /opt/nodejs_stack/. /tmp/nodejs-app/
+rm -rf /tmp/nodejs-app/.git
 
-[Service]
-User=$APP_OS_USER
-WorkingDirectory=$APP_DIR
-Environment="SPRING_PROFILES_ACTIVE=mysql"
-Environment="SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:${DB_PORT:-3306}/${DB_NAME}"
-Environment="SPRING_DATASOURCE_USERNAME=${DB_USER}"
-Environment="SPRING_DATASOURCE_PASSWORD=${DB_PASS}"
-# Expose the native env vars for reference in app
-Environment="DB_HOST=${DB_HOST}"
-Environment="DB_PORT=${DB_PORT:-3306}"
-Environment="DB_NAME=${DB_NAME}"
-Environment="DB_USER=${DB_USER}"
-Environment="DB_PASS=${DB_PASS}"
-ExecStart=/usr/bin/java -jar $APP_DIR/petclinic.jar
-SuccessExitStatus=143
-Restart=always
+cd /tmp/nodejs-app
+git init
+git config --global user.email "vagrant@local"
+git config --global user.name "Vagrant Provisioner"
+git branch -M main
+git add -A
+git commit -m "Initial commit of Node.js app" || echo "Nothing to commit"
 
-[Install]
-WantedBy=multi-user.target
-EOF
+# Push to the local bare repo
+git remote add local /var/git/nodejs-app.git
+git push -f local main
 
-systemctl daemon-reload
-systemctl enable petclinic
-systemctl start petclinic
+# If remote GitHub repository URL is supplied, try to push to it
+if [ -n "$GITHUB_REPO_URL" ]; then
+    # Authenticate git command line by modifying the URL with user and token if they are set
+    AUTH_REPO_URL="$GITHUB_REPO_URL"
+    if [ -n "$GITHUB_USER" ] && [ -n "$GITHUB_TOKEN" ]; then
+        PROTO=$(echo "$GITHUB_REPO_URL" | grep :// | sed -e's,^\(.*://\).*,\1,g')
+        URL_NO_PROTO=$(echo "$GITHUB_REPO_URL" | sed -e"s,^$PROTO,,g")
+        AUTH_REPO_URL="${PROTO}${GITHUB_USER}:${GITHUB_TOKEN}@${URL_NO_PROTO}"
+    fi
 
-echo "=== APP_VM Provisioning Complete! ==="
+    echo "=== Checking if code exists on remote repository ==="
+    git remote add origin "$AUTH_REPO_URL"
+    
+    if git ls-remote --exit-code origin main >/dev/null 2>&1; then
+        echo "=== Branch main already exists on remote repository. Skipping push to avoid overwriting. ==="
+    else
+        echo "=== Remote branch main does not exist. Pushing Node.js app code to remote... ==="
+        git push -u origin main || echo "Warning: Could not push to remote repository. Check your token permissions."
+    fi
+fi
+
+# Clean up the temporary workspace inside the VM
+rm -rf /tmp/nodejs-app
+
+echo "=== Waiting for Jenkins to generate Initial Admin Password ==="
+while [ ! -f /var/jenkins_home/secrets/initialAdminPassword ]; do
+    sleep 2
+done
+
+echo "=================================================="
+echo "JENKINS INITIAL ADMIN PASSWORD:"
+cat /var/jenkins_home/secrets/initialAdminPassword
+echo "=================================================="
